@@ -1,0 +1,17 @@
+.git
+.gitea
+.vscode
+
+node_modules
+**/node_modules
+
+dist
+**/dist
+
+*.tsbuildinfo
+
+.env
+.env.*
+
+coverage
+*.log
