@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RUNNER_TOOL_CACHE: /toolcache
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
