@@ -1,0 +1,13 @@
+DATABASE_URL=postgresql://market_monitor_rw:change-me@sandbox-db-host:5432/market_monitor_sandbox
+APP_ENV=dev-scrape-sandbox
+SCRAPING_ENABLED=true
+SCHEDULER_ENABLED=false
+SCHEDULED_SCRAPE_TIME_LOCAL=06:00
+SCHEDULED_SCRAPE_MARKETS=zaffari
+MIGRATIONS_ENABLED=true
+LOG_LEVEL=debug
+HOST=0.0.0.0
+PORT=3000
+INTERNAL_API_KEY=change-me
+TZ=America/Sao_Paulo
+DOCKERHUB_IMAGE=gabriellando/market-monitor:dev-main

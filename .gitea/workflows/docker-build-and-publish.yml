@@ -1,0 +1,60 @@
+name: Docker Build And Publish
+
+on:
+  schedule:
+    - cron: '0 1 1 * *'
+  push:
+  workflow_dispatch:
+
+env:
+  DOCKERHUB_REPOSITORY: 'gabriellando/market-monitor'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Resolve image tag
+        shell: bash
+        run: |
+          if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
+            tag_name="${{ gitea.ref }}"
+            tag_name="${tag_name#refs/tags/}"
+          elif [[ "${{ gitea.ref }}" == "refs/heads/main" ]]; then
+            tag_name="latest"
+          else
+            branch_name="${{ gitea.ref }}"
+            branch_name="${branch_name#refs/heads/}"
+            branch_name="${branch_name//\//-}"
+            tag_name="dev-${branch_name}"
+          fi
+
+          echo "TAG_NAME=$tag_name" >> "$GITHUB_ENV"
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/Dockerfile.app
+          push: true
+          tags: '${{ env.DOCKERHUB_REPOSITORY }}:${{ env.TAG_NAME }}'
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPOSITORY }}
+          readme-filepath: ./README.md

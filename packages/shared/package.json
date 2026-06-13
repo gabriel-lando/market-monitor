@@ -1,0 +1,23 @@
+{
+    "name": "@market-monitor/shared",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "default": "./src/index.ts"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "lint": "echo No lint configured yet",
+        "typecheck": "tsc --noEmit -p tsconfig.json"
+    },
+    "dependencies": {
+        "zod": "^3.25.67"
+    },
+    "devDependencies": {
+        "typescript": "^5.8.3"
+    }
+}

@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ${DOCKERHUB_IMAGE:-gabriellando/market-monitor:latest}
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      APP_ENV: ${APP_ENV:-prod}
+      SCRAPING_ENABLED: ${SCRAPING_ENABLED:-true}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-false}
+      SCHEDULED_SCRAPE_TIME_LOCAL: ${SCHEDULED_SCRAPE_TIME_LOCAL:-06:00}
+      SCHEDULED_SCRAPE_MARKETS: ${SCHEDULED_SCRAPE_MARKETS:-}
+      MIGRATIONS_ENABLED: ${MIGRATIONS_ENABLED:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-3000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me}
+      TZ: ${TZ:-UTC}
+    ports:
+      - '${PORT:-3000}:3000'

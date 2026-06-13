@@ -1,0 +1,13 @@
+DATABASE_URL=postgresql://market_monitor_rw:change-me@postgres:5432/market_monitor
+APP_ENV=prod
+SCRAPING_ENABLED=true
+SCHEDULER_ENABLED=true
+SCHEDULED_SCRAPE_TIME_LOCAL=06:00
+SCHEDULED_SCRAPE_MARKETS=zaffari
+MIGRATIONS_ENABLED=true
+LOG_LEVEL=info
+HOST=0.0.0.0
+PORT=3000
+INTERNAL_API_KEY=change-me
+TZ=America/Sao_Paulo
+DOCKERHUB_IMAGE=gabriellando/market-monitor
