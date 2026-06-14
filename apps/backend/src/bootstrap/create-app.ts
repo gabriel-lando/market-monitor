@@ -12,10 +12,24 @@ import { createLogger } from '../logging/logger.js';
 export function createApp(config: AppConfig, db: Pool) {
   const deploymentMode = config.scrapingEnabled ? 'writer' : 'readonly';
   const logger = createLogger(config.logLevel, deploymentMode, config.appEnv);
-  const app = Fastify({ loggerInstance: logger });
+  const app = Fastify({ loggerInstance: logger, disableRequestLogging: true });
 
   app.decorate('config', config);
   app.decorate('db', db);
+
+  app.addHook('onRequest', (request, reply, done) => {
+    const logData = {
+      method: request.method,
+      url: request.url,
+      remoteAddr: request.ip,
+    };
+    if (request.method === 'GET') {
+      request.log.debug(logData, `${request.method} ${request.url}`);
+    } else {
+      request.log.info(logData, `${request.method} ${request.url}`);
+    }
+    done();
+  });
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ err: error }, 'Request failed.');
