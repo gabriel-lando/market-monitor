@@ -97,10 +97,16 @@ select {
 }
 
 .brand-mark {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 10px;
   min-width: max-content;
+}
+
+@media (min-width: 721px) {
+  .brand-mark {
+    display: inline-flex;
+  }
 }
 
 .brand-dot {
@@ -356,6 +362,45 @@ select {
   border-color: var(--text);
 }
 
+.price-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.price-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  min-width: 90px;
+}
+
+.price-stat-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.price-stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.price-stat--high .price-stat-value {
+  color: var(--danger);
+}
+
+.price-stat--low .price-stat-value {
+  color: #3aa886;
+}
+
 .chart-wrap {
   display: grid;
   gap: 14px;
@@ -577,15 +622,6 @@ select:focus-visible {
     align-items: stretch;
     gap: 14px;
     padding-top: 0;
-  }
-
-  .search-input-shell {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .search-clear {
-    grid-column: 1 / -1;
-    justify-self: start;
   }
 
   .panel {

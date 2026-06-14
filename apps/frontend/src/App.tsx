@@ -92,6 +92,19 @@ export function App() {
 
   const visibleSeries = useMemo(() => chartSeries.filter((series) => !hiddenMarkets.includes(series.marketCode)), [chartSeries, hiddenMarkets]);
 
+  const priceStats = useMemo(() => {
+    const allPoints = visibleSeries.flatMap((s) => s.points);
+    if (allPoints.length === 0) return null;
+
+    const sorted = [...allPoints].sort((a, b) => Date.parse(b.snapshot_date || b.captured_at) - Date.parse(a.snapshot_date || a.captured_at));
+    const current = sorted[0]?.price_cents ?? null;
+    const prices = allPoints.map((p) => p.price_cents);
+    const high = Math.max(...prices);
+    const low = Math.min(...prices);
+
+    return { current, high, low };
+  }, [visibleSeries]);
+
   const selectedMeta = useMemo(() => {
     if (!productDetail) {
       return null;
@@ -404,6 +417,23 @@ export function App() {
             history.length > 0 ? (
               visibleSeries.length > 0 ? (
                 <>
+                  {priceStats ? (
+                    <div className="price-stats-row" aria-label="Price summary">
+                      <div className="price-stat">
+                        <span className="price-stat-label">Current</span>
+                        <span className="price-stat-value">{priceStats.current !== null ? formatCurrency(priceStats.current) : '—'}</span>
+                      </div>
+                      <div className="price-stat price-stat--high">
+                        <span className="price-stat-label">Highest</span>
+                        <span className="price-stat-value">{formatCurrency(priceStats.high)}</span>
+                      </div>
+                      <div className="price-stat price-stat--low">
+                        <span className="price-stat-label">Lowest</span>
+                        <span className="price-stat-value">{formatCurrency(priceStats.low)}</span>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <PriceHistoryChart ariaLabel={`Price history for ${productDetail.canonical_name}`} series={visibleSeries} />
 
                   {chartSeries.length > 1 ? (
