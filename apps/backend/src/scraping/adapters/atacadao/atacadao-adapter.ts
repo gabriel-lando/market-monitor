@@ -9,21 +9,22 @@ const PAGE_SIZE = 50;
 const PAGE_DELAY_MS = 150;
 const MAX_RATE_LIMIT_RETRIES = 4;
 const RATE_LIMIT_BACKOFF_MS = 1200;
-const PARSER_VERSION = 'zaffari-v1';
+const PARSER_VERSION = 'atacadao-v1';
+const ATACADAO_SALES_CHANNEL = '2';
 
-class ZaffariRequestError extends Error {
+class AtacadaoRequestError extends Error {
   readonly statusCode: number;
   readonly url: string;
 
   constructor(url: string, statusCode: number) {
     super(`Failed request to ${url} with status ${statusCode}`);
-    this.name = 'ZaffariRequestError';
+    this.name = 'AtacadaoRequestError';
     this.statusCode = statusCode;
     this.url = url;
   }
 }
 
-const CategoryTreeNodeSchema: z.ZodType<ZaffariCategoryTreeNode> = z.lazy(() =>
+const CategoryTreeNodeSchema: z.ZodType<AtacadaoCategoryTreeNode> = z.lazy(() =>
   z.object({
     id: z.coerce.number(),
     name: z.string().min(1),
@@ -83,17 +84,17 @@ const ProductSchema = z
   })
   .passthrough();
 
-type ZaffariCategoryTreeNode = {
+type AtacadaoCategoryTreeNode = {
   id: number;
   name: string;
   hasChildren: boolean;
   url: string;
-  children: ZaffariCategoryTreeNode[];
+  children: AtacadaoCategoryTreeNode[];
 };
 
-type ZaffariProduct = z.infer<typeof ProductSchema>;
-type ZaffariItem = z.infer<typeof ItemSchema>;
-type ZaffariSeller = z.infer<typeof SellerSchema>;
+type AtacadaoProduct = z.infer<typeof ProductSchema>;
+type AtacadaoItem = z.infer<typeof ItemSchema>;
+type AtacadaoSeller = z.infer<typeof SellerSchema>;
 
 function toCategorySourceKeys(categoriesIds: string[]) {
   const keys = new Set<string>();
@@ -107,11 +108,11 @@ function toCategorySourceKeys(categoriesIds: string[]) {
   return [...keys];
 }
 
-function selectSeller(item: ZaffariItem) {
+function selectSeller(item: AtacadaoItem) {
   return item.sellers.find((seller) => seller.sellerDefault) ?? item.sellers[0] ?? null;
 }
 
-function resolveAvailabilityStatus(seller: ZaffariSeller | null) {
+function resolveAvailabilityStatus(seller: AtacadaoSeller | null) {
   if (!seller?.commertialOffer) {
     return 'unknown' as const;
   }
@@ -138,7 +139,7 @@ function firstScalar(value: unknown): string | number | undefined {
   return undefined;
 }
 
-function resolveMeasurement(product: ZaffariProduct, item: ZaffariItem) {
+function resolveMeasurement(product: AtacadaoProduct, item: AtacadaoItem) {
   const productUnitValue = toPositiveNumber(firstScalar(product.Cont_liq));
   const itemUnitValue = toPositiveNumber(item.unitMultiplier);
   const productMeasurementUnit = firstScalar(product.UM_Cont);
@@ -150,7 +151,7 @@ function resolveMeasurement(product: ZaffariProduct, item: ZaffariItem) {
   };
 }
 
-function normalizeListing(product: ZaffariProduct, item: ZaffariItem, seller: ZaffariSeller, fetchUrl: string): NormalizedListing | null {
+function normalizeListing(product: AtacadaoProduct, item: AtacadaoItem, seller: AtacadaoSeller, fetchUrl: string): NormalizedListing | null {
   const commercialOffer = seller.commertialOffer;
   const priceCents = toMoneyCents(commercialOffer.Price);
   const availabilityStatus = resolveAvailabilityStatus(seller);
@@ -204,7 +205,7 @@ function normalizeListing(product: ZaffariProduct, item: ZaffariItem, seller: Za
   ].filter((identifier): identifier is NonNullable<typeof identifier> => Boolean(identifier));
 
   return NormalizedListingSchema.parse({
-    marketCode: 'zaffari',
+    marketCode: 'atacadao',
     sourceKey: item.itemId || product.productId,
     sourceProductId: product.productId,
     sourceItemId: item.itemId,
@@ -240,7 +241,7 @@ function normalizeListing(product: ZaffariProduct, item: ZaffariItem, seller: Za
   });
 }
 
-function flattenCategories(nodes: ZaffariCategoryTreeNode[], parentSourceKey: string | null, path: string[], depth: number): ScrapedCategory[] {
+function flattenCategories(nodes: AtacadaoCategoryTreeNode[], parentSourceKey: string | null, path: string[], depth: number): ScrapedCategory[] {
   return nodes.flatMap((node) => {
     const categoryPath = [...path, node.name];
     const category: ScrapedCategory = {
@@ -268,7 +269,7 @@ async function fetchJson<TSchema extends z.ZodTypeAny>(url: string, schema: TSch
   });
 
   if (!response.ok) {
-    throw new ZaffariRequestError(url, response.status);
+    throw new AtacadaoRequestError(url, response.status);
   }
 
   const payload = await response.json();
@@ -284,7 +285,7 @@ async function fetchCategoryPageWithRetries(fetchUrl: string, logger: ScrapeLogg
     try {
       return await fetchJson(fetchUrl, z.array(ProductSchema));
     } catch (error) {
-      if (!(error instanceof ZaffariRequestError)) {
+      if (!(error instanceof AtacadaoRequestError)) {
         throw error;
       }
 
@@ -297,7 +298,7 @@ async function fetchCategoryPageWithRetries(fetchUrl: string, logger: ScrapeLogg
       if (exhausted) {
         logger.warn?.(
           {
-            market: 'zaffari',
+            market: 'atacadao',
             category: category.sourceKey,
             pageIndex,
             from,
@@ -313,7 +314,7 @@ async function fetchCategoryPageWithRetries(fetchUrl: string, logger: ScrapeLogg
       const delayMs = RATE_LIMIT_BACKOFF_MS * (attempt + 1);
       logger.warn?.(
         {
-          market: 'zaffari',
+          market: 'atacadao',
           category: category.sourceKey,
           pageIndex,
           from,
@@ -331,15 +332,15 @@ async function fetchCategoryPageWithRetries(fetchUrl: string, logger: ScrapeLogg
   return null;
 }
 
-export class ZaffariAdapter implements MarketAdapter {
-  readonly marketCode = 'zaffari';
+export class AtacadaoAdapter implements MarketAdapter {
+  readonly marketCode = 'atacadao';
 
   async discoverCategories(logger: ScrapeLogger) {
-    const url = `https://www.zaffari.com.br/api/catalog_system/pub/category/tree/${CATEGORY_TREE_DEPTH}`;
+    const url = `https://www.atacadao.com.br/api/catalog_system/pub/category/tree/${CATEGORY_TREE_DEPTH}`;
     const categoryTree = await fetchJson(url, z.array(CategoryTreeNodeSchema));
     const categories = flattenCategories(categoryTree, null, [], 1);
 
-    logger.info({ market: this.marketCode, categories: categories.length }, 'Discovered Zaffari categories.');
+    logger.info({ market: this.marketCode, categories: categories.length }, 'Discovered Atacadao categories.');
 
     return categories;
   }
@@ -350,13 +351,13 @@ export class ZaffariAdapter implements MarketAdapter {
     for (let pageIndex = 0; ; pageIndex += 1) {
       const from = pageIndex * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      const fetchUrl = `https://www.zaffari.com.br/api/catalog_system/pub/products/search?fq=C:${category.sourceId}&_from=${from}&_to=${to}`;
-      let pageProducts: ZaffariProduct[] | null;
+      const fetchUrl = `https://www.atacadao.com.br/api/catalog_system/pub/products/search?fq=C:${category.sourceId}&_from=${from}&_to=${to}&sc=${ATACADAO_SALES_CHANNEL}`;
+      let pageProducts: AtacadaoProduct[] | null;
 
       try {
         pageProducts = await fetchCategoryPageWithRetries(fetchUrl, logger, category, pageIndex, from, to);
       } catch (error) {
-        if (error instanceof ZaffariRequestError && error.statusCode === 400 && pageIndex > 0) {
+        if (error instanceof AtacadaoRequestError && error.statusCode === 400 && pageIndex > 0) {
           logger.debug?.({ market: this.marketCode, category: category.sourceKey, categoryName: category.name, pageIndex, from, to }, 'Stopping pagination after VTEX returned 400 beyond the available range.');
           break;
         }
@@ -368,7 +369,7 @@ export class ZaffariAdapter implements MarketAdapter {
         break;
       }
 
-      logger.debug?.({ market: this.marketCode, category: category.sourceKey, categoryName: category.name, pageIndex, products: pageProducts.length }, 'Fetched Zaffari category page.');
+      logger.debug?.({ market: this.marketCode, category: category.sourceKey, categoryName: category.name, pageIndex, products: pageProducts.length }, 'Fetched Atacadao category page.');
 
       for (const product of pageProducts) {
         for (const item of product.items) {

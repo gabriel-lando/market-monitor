@@ -262,6 +262,18 @@ select {
   cursor: pointer;
 }
 
+.result-market-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.result-market-price-chip {
+  white-space: nowrap;
+}
+
 .suggestion-card.is-active,
 .suggestion-card.is-selected,
 .suggestion-card:hover,
@@ -349,7 +361,7 @@ select {
   background: var(--surface-strong);
   color: var(--text);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 16px;
   padding: 16px 18px;
@@ -368,16 +380,9 @@ select {
   outline: none;
 }
 
-.search-result-price {
-  min-width: 88px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
 .search-result-copy {
   display: grid;
-  gap: 4px;
+  gap: 8px;
 }
 
 .search-result-copy strong {
@@ -442,12 +447,13 @@ select {
 .price-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   padding: 10px 16px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-strong);
-  min-width: 90px;
+  min-width: 180px;
+  flex: 1 1 220px;
 }
 
 .price-stat-label {
@@ -458,9 +464,29 @@ select {
 }
 
 .price-stat-value {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.price-stat-market-list {
+  display: grid;
+  gap: 6px;
+}
+
+.price-stat-market-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.price-stat-market-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .price-stat--high .price-stat-value {

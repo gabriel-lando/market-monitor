@@ -93,7 +93,7 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
       started_at: startedAt,
       finished_at: finishedAt,
       dry_run: request.dry_run ?? false,
-      message: request.dry_run ? 'Dry run completed without database writes.' : 'Zaffari scrape completed and persisted successfully.',
+      message: request.dry_run ? 'Dry run completed without database writes.' : `${request.market} scrape completed and persisted successfully.`,
       counts: stats,
     };
   } catch (error) {
