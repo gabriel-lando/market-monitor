@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
+RUN pnpm -r typecheck
 RUN pnpm --filter @market-monitor/shared build
 RUN pnpm --filter @market-monitor/db build
 RUN pnpm --filter @market-monitor/frontend build

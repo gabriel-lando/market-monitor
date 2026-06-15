@@ -5,7 +5,7 @@ export const PRODUCT_SEARCH_QUERY = `
       'canonical_product'::TEXT AS result_type,
       p.canonical_name AS name,
       NULL::TEXT AS market_code,
-      NULL::INTEGER AS latest_price_cents,
+      latest_snapshot.price_cents AS latest_price_cents,
       CASE
         WHEN $1 = '' THEN TRUE
         ELSE p.normalized_name LIKE '%' || $1 || '%'
@@ -29,6 +29,14 @@ export const PRODUCT_SEARCH_QUERY = `
       END AS match_score,
       0 AS result_type_rank
     FROM products p
+    LEFT JOIN LATERAL (
+      SELECT ps.price_cents
+      FROM market_listings ml
+      JOIN price_snapshots ps ON ps.market_listing_id = ml.id
+      WHERE ml.product_id = p.id
+      ORDER BY ps.snapshot_date DESC, ps.captured_at DESC
+      LIMIT 1
+    ) AS latest_snapshot ON TRUE
     WHERE $1 = ''
       OR p.normalized_name LIKE '%' || $1 || '%'
       OR ($2 <> '' AND REPLACE(p.normalized_name, ' ', '') LIKE '%' || $2 || '%')

@@ -9,6 +9,8 @@ import { formatCompactDate, formatCurrency } from './lib/format.js';
 const intervals = listHistoryIntervals();
 const chartPalette = ['#f07f2f', '#3aa886', '#5f70ff', '#d65082', '#c49a16', '#0f9fd4'];
 const searchPresets = ['Arroz', 'Cafe', 'Leite', 'Feijao'];
+const SUGGESTION_LIMIT = 20;
+const SEARCH_RESULTS_LIMIT = 50;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -53,6 +55,10 @@ export function App() {
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suppressSuggestionsUntilFocus, setSuppressSuggestionsUntilFocus] = useState(false);
+  const [searchResultsQuery, setSearchResultsQuery] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
+  const [searchResultsState, setSearchResultsState] = useState<LoadState>('idle');
+  const [searchResultsMessage, setSearchResultsMessage] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedInterval, setSelectedInterval] = useState<HistoryInterval>(DEFAULT_HISTORY_INTERVAL);
@@ -64,7 +70,8 @@ export function App() {
 
   const listboxId = useId();
 
-  const canonicalSuggestions = useMemo(() => results.filter((result) => result.result_type === 'canonical_product').slice(0, 6), [results]);
+  const canonicalSuggestions = useMemo(() => results.slice(0, SUGGESTION_LIMIT), [results]);
+  const showSearchResults = selectedProductId === null && searchResultsQuery !== null;
   const hasSearchValue = query.trim().length > 0 || selectedProductId !== null;
 
   const latestUpdate = history.length > 0 ? getLatestTimestamp(history) : (productDetail?.linked_markets.find((market) => market.captured_at)?.captured_at ?? null);
@@ -140,13 +147,15 @@ export function App() {
       setSearchMessage(null);
 
       try {
-        const response = await searchProducts(trimmedQuery, controller.signal);
-        const sortedResults = sortSearchResults(response.data, trimmedQuery).slice(0, 8);
+        const response = await searchProducts(trimmedQuery, { limit: SUGGESTION_LIMIT, signal: controller.signal });
+        const sortedResults = sortSearchResults(response.data, trimmedQuery)
+          .filter((result) => result.result_type === 'canonical_product')
+          .slice(0, SUGGESTION_LIMIT);
 
         startTransition(() => {
           setResults(sortedResults);
           setSuggestionsOpen(!suppressSuggestionsUntilFocus);
-          setActiveIndex(sortedResults.findIndex((result) => result.result_type === 'canonical_product'));
+          setActiveIndex(-1);
           setSearchState('ready');
           setSearchMessage(sortedResults.length === 0 ? 'No matching products found.' : null);
         });
@@ -165,7 +174,58 @@ export function App() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [deferredQuery]);
+  }, [deferredQuery, suppressSuggestionsUntilFocus]);
+
+  useEffect(() => {
+    if (searchResultsQuery === null) {
+      setSearchResults([]);
+      setSearchResultsState('idle');
+      setSearchResultsMessage(null);
+      return;
+    }
+
+    const trimmedSearchResultsQuery = searchResultsQuery.trim();
+
+    if (trimmedSearchResultsQuery.length < 2) {
+      setSearchResults([]);
+      setSearchResultsState('idle');
+      setSearchResultsMessage('Type at least 2 characters.');
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadSearchResults(submittedQuery: string) {
+      setSearchResultsState('loading');
+      setSearchResultsMessage(null);
+
+      try {
+        const response = await searchProducts(submittedQuery, { limit: SEARCH_RESULTS_LIMIT, signal: controller.signal });
+        const canonicalResults = sortSearchResults(response.data, submittedQuery)
+          .filter((result) => result.result_type === 'canonical_product')
+          .slice(0, SEARCH_RESULTS_LIMIT);
+
+        startTransition(() => {
+          setSearchResults(canonicalResults);
+          setSearchResultsState('ready');
+          setSearchResultsMessage(canonicalResults.length === 0 ? 'No matching products found.' : null);
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setSearchResultsState('error');
+        setSearchResultsMessage(error instanceof Error ? error.message : 'Failed to load search results.');
+      }
+    }
+
+    void loadSearchResults(trimmedSearchResultsQuery);
+
+    return () => {
+      controller.abort();
+    };
+  }, [searchResultsQuery]);
 
   useEffect(() => {
     if (!selectedProductId) {
@@ -214,6 +274,10 @@ export function App() {
 
     startTransition(() => {
       setSuppressSuggestionsUntilFocus(true);
+      setSearchResultsQuery(null);
+      setSearchResults([]);
+      setSearchResultsState('idle');
+      setSearchResultsMessage(null);
       setSelectedProductId(result.id);
       setQuery(result.name);
       setSuggestionsOpen(false);
@@ -221,7 +285,47 @@ export function App() {
     });
   }
 
+  function resetSearchResultsView() {
+    setSearchResultsQuery(null);
+    setSearchResults([]);
+    setSearchResultsState('idle');
+    setSearchResultsMessage(null);
+  }
+
+  function handleQueryChange(nextQuery: string) {
+    if (showSearchResults) {
+      setQuery(nextQuery);
+      setSuppressSuggestionsUntilFocus(true);
+      setSuggestionsOpen(false);
+      setActiveIndex(-1);
+      setSearchResultsQuery(nextQuery);
+      return;
+    }
+
+    setSuppressSuggestionsUntilFocus(false);
+    setQuery(nextQuery);
+    resetSearchResultsView();
+  }
+
+  function openSearchResults() {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      return;
+    }
+
+    setSuppressSuggestionsUntilFocus(true);
+    setSuggestionsOpen(false);
+    setActiveIndex(-1);
+    setSelectedProductId(null);
+    setSearchResultsQuery(trimmedQuery);
+  }
+
   function reopenSuggestionsFromInput() {
+    if (showSearchResults) {
+      setSuggestionsOpen(false);
+      return;
+    }
+
     setSuppressSuggestionsUntilFocus(false);
 
     if (results.length > 0 || searchMessage || searchState === 'loading') {
@@ -230,31 +334,39 @@ export function App() {
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (canonicalSuggestions.length === 0) {
-      if (event.key === 'Escape') {
-        setSuggestionsOpen(false);
+    if (event.key === 'ArrowDown') {
+      if (canonicalSuggestions.length === 0) {
+        return;
       }
 
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
       event.preventDefault();
       setSuggestionsOpen(true);
       setActiveIndex((current) => (current < canonicalSuggestions.length - 1 ? current + 1 : 0));
     }
 
     if (event.key === 'ArrowUp') {
+      if (canonicalSuggestions.length === 0) {
+        return;
+      }
+
       event.preventDefault();
       setSuggestionsOpen(true);
       setActiveIndex((current) => (current > 0 ? current - 1 : canonicalSuggestions.length - 1));
     }
 
-    if (event.key === 'Enter' && suggestionsOpen && activeIndex >= 0) {
-      event.preventDefault();
-      const nextResult = canonicalSuggestions[activeIndex];
-      if (nextResult) {
-        selectProduct(nextResult);
+    if (event.key === 'Enter') {
+      if (suggestionsOpen && activeIndex >= 0) {
+        event.preventDefault();
+        const nextResult = canonicalSuggestions[activeIndex];
+        if (nextResult) {
+          selectProduct(nextResult);
+        }
+        return;
+      }
+
+      if (query.trim().length >= 2) {
+        event.preventDefault();
+        openSearchResults();
       }
     }
 
@@ -269,6 +381,7 @@ export function App() {
     setResults([]);
     setSearchState('idle');
     setSearchMessage(null);
+    resetSearchResultsView();
     setSuggestionsOpen(false);
     setActiveIndex(-1);
     setSelectedProductId(null);
@@ -280,6 +393,7 @@ export function App() {
 
   function applySearchPreset(preset: string) {
     setSuppressSuggestionsUntilFocus(false);
+    resetSearchResultsView();
     setSelectedProductId(null);
     setQuery(preset);
     setSuggestionsOpen(false);
@@ -300,12 +414,12 @@ export function App() {
           }
         }}
       >
-        <div className="brand-mark" aria-label="Market Monitor">
+        <button type="button" className="brand-mark brand-home-button" aria-label="Go to home" onClick={clearSelection}>
           <span className="brand-dot" aria-hidden="true">
             🛒
           </span>
           <span className="brand-name">Market Monitor</span>
-        </div>
+        </button>
 
         <div className="search-anchor">
           <label className="sr-only" htmlFor="product-search">
@@ -327,7 +441,7 @@ export function App() {
               aria-autocomplete="list"
               aria-controls={listboxId}
               aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => handleQueryChange(event.target.value)}
               onPointerDown={reopenSuggestionsFromInput}
               onFocus={reopenSuggestionsFromInput}
               onKeyDown={handleSearchKeyDown}
@@ -354,7 +468,6 @@ export function App() {
                           event.preventDefault();
                           selectProduct(result);
                         }}
-                        onMouseEnter={() => setActiveIndex(index)}
                       >
                         <strong>{result.name}</strong>
                         {result.latest_price_cents !== null ? <span>{formatCurrency(result.latest_price_cents)}</span> : null}
@@ -388,6 +501,10 @@ export function App() {
                 ))}
               </div>
             </div>
+          ) : showSearchResults ? (
+            <div className="search-results-head">
+              <p className="eyebrow">Search Results</p>
+            </div>
           ) : (
             <div className="empty-state-head">
               <p className="eyebrow">Market Monitor</p>
@@ -412,6 +529,36 @@ export function App() {
           ) : null}
 
           {detailState === 'error' ? <p className="feedback-message is-error">{detailMessage}</p> : null}
+
+          {showSearchResults ? (
+            <>
+              {searchResultsState === 'loading' ? (
+                <div className="chart-loading-state" aria-live="polite">
+                  <div className="skeleton-line skeleton-title" />
+                  <div className="skeleton-chart" />
+                </div>
+              ) : null}
+
+              {searchResultsState === 'error' ? <p className="feedback-message is-error">{searchResultsMessage}</p> : null}
+
+              {searchResultsState !== 'loading' && searchResultsState !== 'error' ? (
+                searchResults.length > 0 ? (
+                  <div className="search-results-list" role="list" aria-label="Search results list">
+                    {searchResults.map((result) => (
+                      <button key={result.id} type="button" className="search-result-card" onClick={() => selectProduct(result)}>
+                        <span className="search-result-price">{result.latest_price_cents !== null ? formatCurrency(result.latest_price_cents) : '—'}</span>
+                        <span className="search-result-copy">
+                          <strong>{result.name}</strong>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="chart-empty">{searchResultsMessage ?? 'No matching products found.'}</div>
+                )
+              ) : null}
+            </>
+          ) : null}
 
           {detailState !== 'loading' && detailState !== 'error' && selectedProductId && productDetail ? (
             history.length > 0 ? (
@@ -459,7 +606,7 @@ export function App() {
             )
           ) : null}
 
-          {!selectedProductId && detailState === 'idle' ? (
+          {!selectedProductId && !showSearchResults && detailState === 'idle' ? (
             <div className="home-preview" aria-hidden="true">
               <div className="home-preview-chart">
                 <span className="preview-grid preview-grid-top" />

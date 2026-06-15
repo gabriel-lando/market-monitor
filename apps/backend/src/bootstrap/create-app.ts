@@ -17,7 +17,7 @@ export function createApp(config: AppConfig, db: Pool) {
   app.decorate('config', config);
   app.decorate('db', db);
 
-  app.addHook('onRequest', (request, reply, done) => {
+  app.addHook('onRequest', (request, _reply, done) => {
     const logData = {
       method: request.method,
       url: request.url,

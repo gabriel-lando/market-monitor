@@ -3,6 +3,12 @@ import { DEFAULT_HISTORY_INTERVAL, HISTORY_INTERVALS, type HistoryInterval, type
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (rawBaseUrl && rawBaseUrl.trim().length > 0 ? rawBaseUrl : window.location.origin).replace(/\/$/, '');
 
+interface SearchProductsOptions {
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}
+
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { signal });
 
@@ -17,13 +23,21 @@ export function listHistoryIntervals() {
   return HISTORY_INTERVALS;
 }
 
-export async function searchProducts(query: string, signal?: AbortSignal) {
+export async function searchProducts(query: string, options: SearchProductsOptions = {}) {
   const params = new URLSearchParams();
   if (query.trim()) {
     params.set('q', query.trim());
   }
 
-  return fetchJson<{ data: ProductSearchResult[]; meta: PaginationMeta }>(`/api/v1/products?${params.toString()}`, signal);
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
+
+  if (options.offset !== undefined) {
+    params.set('offset', String(options.offset));
+  }
+
+  return fetchJson<{ data: ProductSearchResult[]; meta: PaginationMeta }>(`/api/v1/products?${params.toString()}`, options.signal);
 }
 
 export async function getProduct(productId: string, signal?: AbortSignal) {
