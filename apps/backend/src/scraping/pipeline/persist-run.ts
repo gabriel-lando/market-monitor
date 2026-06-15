@@ -160,6 +160,55 @@ type ProductMatch = {
   matchMethod: string;
 };
 
+async function resolveExactNameMatch(client: PoolClient, marketId: string, listing: NormalizedListing): Promise<ProductMatch | null> {
+  const marketScoped = await client.query<{ product_id: string }>(
+    `
+      SELECT ml.product_id
+      FROM market_listings ml
+      WHERE
+        ml.market_id = $1
+        AND ml.product_id IS NOT NULL
+        AND ml.normalized_name = $2
+        AND ($3::text IS NULL OR ml.normalized_brand = $3)
+      GROUP BY ml.product_id
+      ORDER BY MAX(ml.last_seen_at) DESC
+      LIMIT 2
+    `,
+    [marketId, listing.normalizedName, listing.normalizedBrand ?? null],
+  );
+
+  if (marketScoped.rows.length === 1) {
+    return {
+      productId: marketScoped.rows[0].product_id,
+      matched: true,
+      matchMethod: listing.normalizedBrand ? 'market_exact_name_brand' : 'market_exact_name',
+    };
+  }
+
+  const globalScoped = await client.query<{ id: string }>(
+    `
+      SELECT p.id
+      FROM products p
+      WHERE
+        p.normalized_name = $1
+        AND ($2::text IS NULL OR p.normalized_brand = $2)
+      ORDER BY p.updated_at DESC
+      LIMIT 2
+    `,
+    [listing.normalizedName, listing.normalizedBrand ?? null],
+  );
+
+  if (globalScoped.rows.length === 1) {
+    return {
+      productId: globalScoped.rows[0].id,
+      matched: true,
+      matchMethod: listing.normalizedBrand ? 'global_exact_name_brand' : 'global_exact_name',
+    };
+  }
+
+  return null;
+}
+
 async function resolveProductMatch(client: PoolClient, marketId: string, listing: NormalizedListing): Promise<ProductMatch | null> {
   const existingListing = await client.query<{ product_id: string | null }>(
     `
@@ -212,6 +261,11 @@ async function resolveProductMatch(client: PoolClient, marketId: string, listing
         matchMethod: identifier.scope === 'global' ? 'exact_identifier' : 'market_identifier',
       };
     }
+  }
+
+  const exactNameMatch = await resolveExactNameMatch(client, marketId, listing);
+  if (exactNameMatch) {
+    return exactNameMatch;
   }
 
   return null;
