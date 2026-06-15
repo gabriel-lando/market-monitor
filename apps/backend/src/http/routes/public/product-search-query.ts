@@ -1,11 +1,40 @@
 export const PRODUCT_SEARCH_QUERY = `
-  WITH candidates AS (
+  WITH latest_product_market_prices AS (
+    SELECT
+      ml.product_id,
+      m.code AS market_code,
+      m.name AS market_name,
+      latest_snapshot.price_cents AS latest_price_cents
+    FROM market_listings ml
+    JOIN markets m ON m.id = ml.market_id
+    LEFT JOIN LATERAL (
+      SELECT ps.price_cents
+      FROM price_snapshots ps
+      WHERE ps.market_listing_id = ml.id
+      ORDER BY ps.snapshot_date DESC, ps.captured_at DESC
+      LIMIT 1
+    ) AS latest_snapshot ON TRUE
+  ), canonical_market_prices AS (
+    SELECT
+      product_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'market_code', market_code,
+          'market_name', market_name,
+          'latest_price_cents', latest_price_cents
+        )
+        ORDER BY market_name
+      ) AS market_prices
+    FROM latest_product_market_prices
+    GROUP BY product_id
+  ), candidates AS (
     SELECT
       p.id,
       'canonical_product'::TEXT AS result_type,
       p.canonical_name AS name,
       NULL::TEXT AS market_code,
       latest_snapshot.price_cents AS latest_price_cents,
+      COALESCE(canonical_market_prices.market_prices, '[]'::jsonb) AS market_prices,
       CASE
         WHEN $1 = '' THEN TRUE
         ELSE p.normalized_name LIKE '%' || $1 || '%'
@@ -37,6 +66,7 @@ export const PRODUCT_SEARCH_QUERY = `
       ORDER BY ps.snapshot_date DESC, ps.captured_at DESC
       LIMIT 1
     ) AS latest_snapshot ON TRUE
+    LEFT JOIN canonical_market_prices ON canonical_market_prices.product_id = p.id
     WHERE $1 = ''
       OR p.normalized_name LIKE '%' || $1 || '%'
       OR ($2 <> '' AND REPLACE(p.normalized_name, ' ', '') LIKE '%' || $2 || '%')
@@ -60,6 +90,13 @@ export const PRODUCT_SEARCH_QUERY = `
       ml.source_name AS name,
       m.code AS market_code,
       latest_snapshot.price_cents AS latest_price_cents,
+      jsonb_build_array(
+        jsonb_build_object(
+          'market_code', m.code,
+          'market_name', m.name,
+          'latest_price_cents', latest_snapshot.price_cents
+        )
+      ) AS market_prices,
       CASE
         WHEN $1 = '' THEN TRUE
         ELSE ml.normalized_name LIKE '%' || $1 || '%'
@@ -116,6 +153,7 @@ export const PRODUCT_SEARCH_QUERY = `
       name,
       market_code,
       latest_price_cents,
+      market_prices,
       COUNT(*) OVER ()::INTEGER AS total_count,
       CASE WHEN is_direct_match THEN 0 ELSE 1 END AS direct_match_rank,
       match_score,
@@ -128,6 +166,7 @@ export const PRODUCT_SEARCH_QUERY = `
     name,
     market_code,
     latest_price_cents,
+    market_prices,
     total_count
   FROM ranked
   ORDER BY direct_match_rank ASC, match_score DESC, result_type_rank ASC, name ASC

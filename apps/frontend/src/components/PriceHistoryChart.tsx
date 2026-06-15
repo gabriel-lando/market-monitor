@@ -20,13 +20,34 @@ const CHART_WIDTH = 720;
 const CHART_HEIGHT = 320;
 const PADDING = { top: 20, right: 16, bottom: 34, left: 54 };
 
-function getPointTimestamp(point: HistoryPoint) {
-  const capturedAt = Date.parse(point.captured_at);
-  if (!Number.isNaN(capturedAt)) {
-    return capturedAt;
+function parseDateOnlyTimestamp(value: string) {
+  const normalized = value.trim();
+  const datePart = normalized.includes('T') ? normalized.slice(0, 10) : normalized;
+  const [yearText, monthText, dayText] = datePart.split('-');
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return Number.NaN;
   }
 
-  return Date.parse(point.snapshot_date);
+  return Date.UTC(year, month - 1, day);
+}
+
+function getPointTimestamp(point: HistoryPoint) {
+  const snapshotDate = parseDateOnlyTimestamp(point.snapshot_date);
+  if (!Number.isNaN(snapshotDate)) {
+    return snapshotDate;
+  }
+
+  const capturedAtDate = parseDateOnlyTimestamp(point.captured_at);
+  if (!Number.isNaN(capturedAtDate)) {
+    return capturedAtDate;
+  }
+
+  return Date.parse(point.captured_at);
 }
 
 export function PriceHistoryChart({ ariaLabel, series }: PriceHistoryChartProps) {

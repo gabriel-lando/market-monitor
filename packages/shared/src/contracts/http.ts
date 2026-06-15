@@ -32,6 +32,13 @@ export interface ProductSearchResult {
   name: string;
   market_code: string | null;
   latest_price_cents: number | null;
+  market_prices: ProductSearchMarketPrice[];
+}
+
+export interface ProductSearchMarketPrice {
+  market_code: string;
+  market_name: string;
+  latest_price_cents: number | null;
 }
 
 export interface ProductLinkedMarket {

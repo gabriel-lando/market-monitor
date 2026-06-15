@@ -47,6 +47,34 @@ function getLatestTimestamp(points: HistoryPoint[]) {
   return latest?.captured_at ?? latest?.snapshot_date ?? null;
 }
 
+function getPointSortTimestamp(point: HistoryPoint) {
+  const capturedAt = Date.parse(point.captured_at);
+  if (!Number.isNaN(capturedAt)) {
+    return capturedAt;
+  }
+
+  return Date.parse(point.snapshot_date);
+}
+
+function getSearchResultMarketPrices(result: ProductSearchResult) {
+  const providedPrices = Array.isArray(result.market_prices) ? result.market_prices : [];
+  if (providedPrices.length > 0) {
+    return [...providedPrices].sort((left, right) => left.market_name.localeCompare(right.market_name, 'pt-BR'));
+  }
+
+  if (result.market_code || result.latest_price_cents !== null) {
+    return [
+      {
+        market_code: result.market_code ?? 'unknown',
+        market_name: result.market_code ?? 'Market',
+        latest_price_cents: result.latest_price_cents,
+      },
+    ];
+  }
+
+  return [];
+}
+
 export function App() {
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -99,18 +127,30 @@ export function App() {
 
   const visibleSeries = useMemo(() => chartSeries.filter((series) => !hiddenMarkets.includes(series.marketCode)), [chartSeries, hiddenMarkets]);
 
-  const priceStats = useMemo(() => {
-    const allPoints = visibleSeries.flatMap((s) => s.points);
-    if (allPoints.length === 0) return null;
+  const visibleMarketStats = useMemo(
+    () =>
+      chartSeries
+        .filter((series) => !hiddenMarkets.includes(series.marketCode))
+        .map((series) => {
+          if (series.points.length === 0) {
+            return null;
+          }
 
-    const sorted = [...allPoints].sort((a, b) => Date.parse(b.snapshot_date || b.captured_at) - Date.parse(a.snapshot_date || a.captured_at));
-    const current = sorted[0]?.price_cents ?? null;
-    const prices = allPoints.map((p) => p.price_cents);
-    const high = Math.max(...prices);
-    const low = Math.min(...prices);
+          const sorted = [...series.points].sort((left, right) => getPointSortTimestamp(right) - getPointSortTimestamp(left));
+          const prices = series.points.map((point) => point.price_cents);
 
-    return { current, high, low };
-  }, [visibleSeries]);
+          return {
+            marketCode: series.marketCode,
+            marketName: series.marketName,
+            color: series.color,
+            current: sorted[0]?.price_cents ?? null,
+            high: Math.max(...prices),
+            low: Math.min(...prices),
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null),
+    [chartSeries, hiddenMarkets],
+  );
 
   const selectedMeta = useMemo(() => {
     if (!productDetail) {
@@ -470,7 +510,15 @@ export function App() {
                         }}
                       >
                         <strong>{result.name}</strong>
-                        {result.latest_price_cents !== null ? <span>{formatCurrency(result.latest_price_cents)}</span> : null}
+                        {getSearchResultMarketPrices(result).length > 0 ? (
+                          <div className="result-market-prices" aria-label="Market prices">
+                            {getSearchResultMarketPrices(result).map((marketPrice) => (
+                              <span key={`${result.id}:${marketPrice.market_code}`} className="result-market-price-chip">
+                                {marketPrice.market_name}: {marketPrice.latest_price_cents !== null ? formatCurrency(marketPrice.latest_price_cents) : '—'}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </button>
                     </li>
                   ))}
@@ -546,9 +594,17 @@ export function App() {
                   <div className="search-results-list" role="list" aria-label="Search results list">
                     {searchResults.map((result) => (
                       <button key={result.id} type="button" className="search-result-card" onClick={() => selectProduct(result)}>
-                        <span className="search-result-price">{result.latest_price_cents !== null ? formatCurrency(result.latest_price_cents) : '—'}</span>
                         <span className="search-result-copy">
                           <strong>{result.name}</strong>
+                          {getSearchResultMarketPrices(result).length > 0 ? (
+                            <span className="result-market-prices" aria-label="Market prices">
+                              {getSearchResultMarketPrices(result).map((marketPrice) => (
+                                <span key={`${result.id}:${marketPrice.market_code}`} className="result-market-price-chip">
+                                  {marketPrice.market_name}: {marketPrice.latest_price_cents !== null ? formatCurrency(marketPrice.latest_price_cents) : '—'}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     ))}
@@ -562,45 +618,73 @@ export function App() {
 
           {detailState !== 'loading' && detailState !== 'error' && selectedProductId && productDetail ? (
             history.length > 0 ? (
-              visibleSeries.length > 0 ? (
-                <>
-                  {priceStats ? (
-                    <div className="price-stats-row" aria-label="Price summary">
-                      <div className="price-stat">
-                        <span className="price-stat-label">Current</span>
-                        <span className="price-stat-value">{priceStats.current !== null ? formatCurrency(priceStats.current) : '—'}</span>
-                      </div>
-                      <div className="price-stat price-stat--high">
-                        <span className="price-stat-label">Highest</span>
-                        <span className="price-stat-value">{formatCurrency(priceStats.high)}</span>
-                      </div>
-                      <div className="price-stat price-stat--low">
-                        <span className="price-stat-label">Lowest</span>
-                        <span className="price-stat-value">{formatCurrency(priceStats.low)}</span>
+              <>
+                {visibleMarketStats.length > 0 ? (
+                  <div className="price-stats-row" aria-label="Price summary by market">
+                    <div className="price-stat">
+                      <span className="price-stat-label">Current</span>
+                      <div className="price-stat-market-list">
+                        {visibleMarketStats.map((market) => (
+                          <div key={`current:${market.marketCode}`} className="price-stat-market-row">
+                            <span className="price-stat-market-name">
+                              <span className="legend-swatch" style={{ backgroundColor: market.color }} aria-hidden="true" />
+                              <span>{market.marketName}</span>
+                            </span>
+                            <span className="price-stat-value">{market.current !== null ? formatCurrency(market.current) : '—'}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ) : null}
 
-                  <PriceHistoryChart ariaLabel={`Price history for ${productDetail.canonical_name}`} series={visibleSeries} />
-
-                  {chartSeries.length > 1 ? (
-                    <div className="legend-row" aria-label="Toggle market series visibility">
-                      {chartSeries.map((series) => {
-                        const isHidden = hiddenMarkets.includes(series.marketCode);
-
-                        return (
-                          <button key={series.marketCode} type="button" className={`legend-chip ${isHidden ? 'is-muted' : ''}`} onClick={() => toggleMarketVisibility(series.marketCode)} aria-pressed={!isHidden}>
-                            <span className="legend-swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
-                            <span>{series.marketName}</span>
-                          </button>
-                        );
-                      })}
+                    <div className="price-stat price-stat--high">
+                      <span className="price-stat-label">Highest</span>
+                      <div className="price-stat-market-list">
+                        {visibleMarketStats.map((market) => (
+                          <div key={`high:${market.marketCode}`} className="price-stat-market-row">
+                            <span className="price-stat-market-name">
+                              <span className="legend-swatch" style={{ backgroundColor: market.color }} aria-hidden="true" />
+                              <span>{market.marketName}</span>
+                            </span>
+                            <span className="price-stat-value">{formatCurrency(market.high)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="chart-empty">Enable at least one market to render the chart.</div>
-              )
+
+                    <div className="price-stat price-stat--low">
+                      <span className="price-stat-label">Lowest</span>
+                      <div className="price-stat-market-list">
+                        {visibleMarketStats.map((market) => (
+                          <div key={`low:${market.marketCode}`} className="price-stat-market-row">
+                            <span className="price-stat-market-name">
+                              <span className="legend-swatch" style={{ backgroundColor: market.color }} aria-hidden="true" />
+                              <span>{market.marketName}</span>
+                            </span>
+                            <span className="price-stat-value">{formatCurrency(market.low)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {visibleSeries.length > 0 ? <PriceHistoryChart ariaLabel={`Price history for ${productDetail.canonical_name}`} series={visibleSeries} /> : <div className="chart-empty">Enable at least one market to render the chart.</div>}
+
+                {chartSeries.length > 1 ? (
+                  <div className="legend-row" aria-label="Toggle market series visibility">
+                    {chartSeries.map((series) => {
+                      const isHidden = hiddenMarkets.includes(series.marketCode);
+
+                      return (
+                        <button key={series.marketCode} type="button" className={`legend-chip ${isHidden ? 'is-muted' : ''}`} onClick={() => toggleMarketVisibility(series.marketCode)} aria-pressed={!isHidden}>
+                          <span className="legend-swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
+                          <span>{series.marketName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <div className="chart-empty">History is not available for this product yet.</div>
             )
