@@ -357,7 +357,7 @@ export class ZaffariAdapter implements MarketAdapter {
         pageProducts = await fetchCategoryPageWithRetries(fetchUrl, logger, category, pageIndex, from, to);
       } catch (error) {
         if (error instanceof ZaffariRequestError && error.statusCode === 400 && pageIndex > 0) {
-          logger.debug?.({ market: this.marketCode, category: category.sourceKey, pageIndex, from, to }, 'Stopping pagination after VTEX returned 400 beyond the available range.');
+          logger.debug?.({ market: this.marketCode, category: category.sourceKey, categoryName: category.name, pageIndex, from, to }, 'Stopping pagination after VTEX returned 400 beyond the available range.');
           break;
         }
 
@@ -368,7 +368,7 @@ export class ZaffariAdapter implements MarketAdapter {
         break;
       }
 
-      logger.debug?.({ market: this.marketCode, category: category.sourceKey, pageIndex, products: pageProducts.length }, 'Fetched Zaffari category page.');
+      logger.debug?.({ market: this.marketCode, category: category.sourceKey, categoryName: category.name, pageIndex, products: pageProducts.length }, 'Fetched Zaffari category page.');
 
       for (const product of pageProducts) {
         for (const item of product.items) {
