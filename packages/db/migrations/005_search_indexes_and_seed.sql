@@ -51,3 +51,25 @@ ON CONFLICT (market_id, code) DO UPDATE SET
   country_code = EXCLUDED.country_code,
   is_enabled = EXCLUDED.is_enabled,
   updated_at = NOW();
+
+INSERT INTO markets (code, name, base_url, country_code, region, is_enabled)
+VALUES ('atacadao', 'Atacadao', 'https://www.atacadao.com.br', 'BR', 'BR', TRUE)
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name,
+  base_url = EXCLUDED.base_url,
+  country_code = EXCLUDED.country_code,
+  region = EXCLUDED.region,
+  is_enabled = EXCLUDED.is_enabled,
+  updated_at = NOW();
+
+INSERT INTO stores (market_id, code, name, scope_type, city, state, country_code, is_enabled)
+SELECT id, 'default', 'Default Market Scope', 'market', NULL, NULL, 'BR', TRUE
+FROM markets
+WHERE code = 'atacadao'
+ON CONFLICT (market_id, code) DO UPDATE SET
+  name = EXCLUDED.name,
+  scope_type = EXCLUDED.scope_type,
+  state = EXCLUDED.state,
+  country_code = EXCLUDED.country_code,
+  is_enabled = EXCLUDED.is_enabled,
+  updated_at = NOW();
