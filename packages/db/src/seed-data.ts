@@ -80,6 +80,39 @@ export async function seedBaseData(poolArg?: Pool, logger: SeedLogger = defaultL
     );
   }
 
+  const carrefourMarketResult = await pool.query<{ id: string }>(`
+    INSERT INTO markets (code, name, base_url, country_code, region, is_enabled)
+    VALUES ('carrefour', 'Carrefour (Plínio)', 'https://mercado.carrefour.com.br', 'BR', 'RS', TRUE)
+    ON CONFLICT (code) DO UPDATE SET
+      name = EXCLUDED.name,
+      base_url = EXCLUDED.base_url,
+      country_code = EXCLUDED.country_code,
+      region = EXCLUDED.region,
+      is_enabled = EXCLUDED.is_enabled,
+      updated_at = NOW()
+    RETURNING id
+  `);
+
+  const carrefourMarketId = carrefourMarketResult.rows[0]?.id;
+
+  if (carrefourMarketId) {
+    await pool.query(
+      `
+        INSERT INTO stores (market_id, code, name, scope_type, city, state, country_code, is_enabled)
+        VALUES ($1, 'default', 'Hiper Passo d Areia', 'store', 'Porto Alegre', 'RS', 'BR', TRUE)
+        ON CONFLICT (market_id, code) DO UPDATE SET
+          name = EXCLUDED.name,
+          scope_type = EXCLUDED.scope_type,
+          city = EXCLUDED.city,
+          state = EXCLUDED.state,
+          country_code = EXCLUDED.country_code,
+          is_enabled = EXCLUDED.is_enabled,
+          updated_at = NOW()
+      `,
+      [carrefourMarketId],
+    );
+  }
+
   logger.info('Seeded base market data.');
 
   if (poolArg === undefined) {

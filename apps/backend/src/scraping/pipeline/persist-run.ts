@@ -242,7 +242,7 @@ async function createProduct(client: PoolClient, listing: NormalizedListing) {
   return result.rows[0].id;
 }
 
-async function upsertIdentifier(client: PoolClient, productId: string, marketId: string, identifier: NormalizedIdentifier) {
+async function upsertIdentifier(client: PoolClient, productId: string, marketId: string, identifier: NormalizedIdentifier, sourceNote: string) {
   if (identifier.scope === 'global') {
     await client.query(
       `
@@ -257,7 +257,7 @@ async function upsertIdentifier(client: PoolClient, productId: string, marketId:
           created_at,
           updated_at
         )
-        VALUES ($1, NULL, $2, $3, $4, $5, 'zaffari-adapter', NOW(), NOW())
+        VALUES ($1, NULL, $2, $3, $4, $5, $6, NOW(), NOW())
         ON CONFLICT (identifier_type, identifier_value) WHERE market_id IS NULL
         DO UPDATE SET
           product_id = EXCLUDED.product_id,
@@ -265,7 +265,7 @@ async function upsertIdentifier(client: PoolClient, productId: string, marketId:
           is_verified = EXCLUDED.is_verified,
           updated_at = NOW()
       `,
-      [productId, identifier.type, identifier.value, identifier.isPrimary, identifier.isVerified],
+      [productId, identifier.type, identifier.value, identifier.isPrimary, identifier.isVerified, sourceNote],
     );
     return;
   }
@@ -283,7 +283,7 @@ async function upsertIdentifier(client: PoolClient, productId: string, marketId:
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'zaffari-adapter', NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
       ON CONFLICT (market_id, identifier_type, identifier_value) WHERE market_id IS NOT NULL
       DO UPDATE SET
         product_id = EXCLUDED.product_id,
@@ -291,7 +291,7 @@ async function upsertIdentifier(client: PoolClient, productId: string, marketId:
         is_verified = EXCLUDED.is_verified,
         updated_at = NOW()
     `,
-    [productId, marketId, identifier.type, identifier.value, identifier.isPrimary, identifier.isVerified],
+    [productId, marketId, identifier.type, identifier.value, identifier.isPrimary, identifier.isVerified, sourceNote],
   );
 }
 
@@ -470,6 +470,7 @@ async function insertRawPayload(client: PoolClient, marketId: string, storeId: s
 
 export async function persistListing(pool: Pool, marketContext: MarketContext, runId: string, categoryIdBySourceKey: Map<string, string>, listing: NormalizedListing) {
   const client = await pool.connect();
+  const sourceNote = `${listing.marketCode}-adapter`;
 
   try {
     await client.query('BEGIN');
@@ -478,7 +479,7 @@ export async function persistListing(pool: Pool, marketContext: MarketContext, r
     const productId = match?.productId ?? (await createProduct(client, listing));
 
     for (const identifier of listing.identifiers) {
-      await upsertIdentifier(client, productId, marketContext.marketId, identifier);
+      await upsertIdentifier(client, productId, marketContext.marketId, identifier, sourceNote);
     }
 
     const listingId = await upsertMarketListing(client, marketContext.marketId, productId, listing, match?.matchMethod ?? 'source_seed');
