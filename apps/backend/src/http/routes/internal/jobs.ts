@@ -27,30 +27,35 @@ export const internalJobRoutes: FastifyPluginAsync = async (app) => {
 
     const payload = ScrapeRequestSchema.parse(request.body) as ScrapeJobRequest;
 
-    try {
-      const result = await runScrapeOnce(
+    const startedAt = new Date().toISOString();
+
+    setImmediate(() => {
+      void runScrapeOnce(
         {
           config: app.config,
           logger: app.log,
           db: app.db,
         },
         payload,
-      );
+      ).catch((error) => {
+        if (error instanceof ScrapingDisabledError) {
+          app.log.warn({ market: payload.market, err: error }, 'Scrape job aborted because scraping is disabled.');
+          return;
+        }
 
-      return reply.code(202).send({ data: result });
-    } catch (error) {
-      if (error instanceof ScrapingDisabledError) {
-        return reply.code(409).send({
-          error: {
-            code: SCRAPING_DISABLED_ERROR_CODE,
-            message: error.message,
-          },
-          request_id: request.id,
-        });
-      }
+        app.log.error({ market: payload.market, err: error }, 'Background scrape job failed.');
+      });
+    });
 
-      throw error;
-    }
+    return reply.code(202).send({
+      data: {
+        status: 'accepted',
+        market: payload.market,
+        started_at: startedAt,
+        message: 'Scrape job accepted and started asynchronously.',
+      },
+      request_id: request.id,
+    });
   });
 
   app.get('/jobs/runs', async (request) => {
