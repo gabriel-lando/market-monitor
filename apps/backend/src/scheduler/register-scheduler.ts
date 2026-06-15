@@ -52,6 +52,7 @@ async function runScheduledScrapes(dependencies: SchedulerDependencies, markets:
         {
           market,
           reason: 'daily-scheduler',
+          trigger_source: 'scheduler',
         },
       );
 

@@ -22,6 +22,8 @@ export interface MarketContext {
   storeId: string;
 }
 
+export type CollectionRunTriggerSource = 'manual' | 'scheduler' | 'dry-run';
+
 export function createEmptyStats(): ScrapePersistenceStats {
   return {
     categoriesDiscovered: 0,
@@ -76,14 +78,14 @@ export async function releaseMarketLock(pool: Pool, marketCode: string) {
   await pool.query('SELECT pg_advisory_unlock(hashtext($1))', [`scrape:${marketCode}`]);
 }
 
-export async function createCollectionRun(pool: Pool, marketContext: MarketContext, marketCode: string, dryRun: boolean, reason?: string) {
+export async function createCollectionRun(pool: Pool, marketContext: MarketContext, marketCode: string, triggerSource: CollectionRunTriggerSource, dryRun: boolean, reason?: string) {
   const result = await pool.query<{ id: string; started_at: string }>(
     `
       INSERT INTO collection_runs (market_id, store_id, job_name, trigger_source, status, metadata)
       VALUES ($1, $2, 'scrape-once', $3, 'running', $4::jsonb)
       RETURNING id, started_at::text
     `,
-    [marketContext.marketId, marketContext.storeId, dryRun ? 'dry-run' : 'manual', JSON.stringify({ marketCode, dryRun, reason: reason ?? null })],
+    [marketContext.marketId, marketContext.storeId, triggerSource, JSON.stringify({ marketCode, dryRun, reason: reason ?? null })],
   );
 
   return result.rows[0];

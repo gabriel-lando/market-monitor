@@ -6,6 +6,7 @@ import type { ScrapeJobRequest, ScrapeJobResult } from '@market-monitor/shared';
 import { getMarketAdapter } from '../adapters/index.js';
 import { acquireMarketLock, createCollectionRun, createEmptyStats, mergeStats, persistListing, releaseMarketLock, resolveMarketContext, updateCollectionRun, upsertCategories } from '../pipeline/persist-run.js';
 import { ScrapeAlreadyRunningError, ScrapingDisabledError } from './errors.js';
+import type { CollectionRunTriggerSource } from '../pipeline/persist-run.js';
 
 interface JobLogger {
   info(payload: unknown, message?: string): void;
@@ -20,7 +21,11 @@ interface RunScrapeOnceDependencies {
   db: Pool;
 }
 
-export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, request: ScrapeJobRequest): Promise<ScrapeJobResult> {
+type RunScrapeOnceRequest = ScrapeJobRequest & {
+  trigger_source?: Exclude<CollectionRunTriggerSource, 'dry-run'>;
+};
+
+export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, request: RunScrapeOnceRequest): Promise<ScrapeJobResult> {
   const { config, logger, db } = dependencies;
 
   if (!config.scrapingEnabled) {
@@ -36,12 +41,14 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
 
   const startedAt = new Date().toISOString();
   const stats = createEmptyStats();
+  const triggerSource: CollectionRunTriggerSource = request.dry_run ? 'dry-run' : (request.trigger_source ?? 'manual');
   let runId: string | undefined;
 
   try {
     logger.info(
       {
         market: request.market,
+        trigger_source: triggerSource,
         dry_run: request.dry_run ?? false,
         force: request.force ?? false,
         reason: request.reason ?? null,
@@ -57,7 +64,7 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
 
     let categoryIdBySourceKey = new Map<string, string>();
     if (!request.dry_run) {
-      const run = await createCollectionRun(db, marketContext, request.market, request.dry_run ?? false, request.reason);
+      const run = await createCollectionRun(db, marketContext, request.market, triggerSource, request.dry_run ?? false, request.reason);
       runId = run.id;
       categoryIdBySourceKey = await upsertCategories(db, marketContext.marketId, categories);
     }
