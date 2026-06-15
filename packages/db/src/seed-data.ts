@@ -50,7 +50,7 @@ export async function seedBaseData(poolArg?: Pool, logger: SeedLogger = defaultL
 
   const atacadaoMarketResult = await pool.query<{ id: string }>(`
     INSERT INTO markets (code, name, base_url, country_code, region, is_enabled)
-    VALUES ('atacadao', 'Atacadao', 'https://www.atacadao.com.br', 'BR', 'BR', TRUE)
+    VALUES ('atacadao', 'Atacadão (Sertório)', 'https://www.atacadao.com.br', 'BR', 'BR', TRUE)
     ON CONFLICT (code) DO UPDATE SET
       name = EXCLUDED.name,
       base_url = EXCLUDED.base_url,

@@ -53,7 +53,7 @@ ON CONFLICT (market_id, code) DO UPDATE SET
   updated_at = NOW();
 
 INSERT INTO markets (code, name, base_url, country_code, region, is_enabled)
-VALUES ('atacadao', 'Atacadao', 'https://www.atacadao.com.br', 'BR', 'BR', TRUE)
+VALUES ('atacadao', 'Atacadão (Sertório)', 'https://www.atacadao.com.br', 'BR', 'BR', TRUE)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   base_url = EXCLUDED.base_url,

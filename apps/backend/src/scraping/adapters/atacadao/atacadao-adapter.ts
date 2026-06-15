@@ -10,6 +10,7 @@ const PAGE_DELAY_MS = 150;
 const MAX_RATE_LIMIT_RETRIES = 4;
 const RATE_LIMIT_BACKOFF_MS = 1200;
 const PARSER_VERSION = 'atacadao-v1';
+const ATACADAO_SALES_CHANNEL = '2';
 
 class AtacadaoRequestError extends Error {
   readonly statusCode: number;
@@ -350,7 +351,7 @@ export class AtacadaoAdapter implements MarketAdapter {
     for (let pageIndex = 0; ; pageIndex += 1) {
       const from = pageIndex * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      const fetchUrl = `https://www.atacadao.com.br/api/catalog_system/pub/products/search?fq=C:${category.sourceId}&_from=${from}&_to=${to}`;
+      const fetchUrl = `https://www.atacadao.com.br/api/catalog_system/pub/products/search?fq=C:${category.sourceId}&_from=${from}&_to=${to}&sc=${ATACADAO_SALES_CHANNEL}`;
       let pageProducts: AtacadaoProduct[] | null;
 
       try {
