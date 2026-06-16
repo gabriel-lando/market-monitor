@@ -94,6 +94,19 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
       await updateCollectionRun(db, runId, 'completed', stats);
     }
 
+    logger.info(
+      {
+        market: request.market,
+        trigger_source: triggerSource,
+        run_id: runId,
+        dry_run: request.dry_run ?? false,
+        started_at: startedAt,
+        finished_at: finishedAt,
+        counts: stats,
+      },
+      'Scrape job completed.',
+    );
+
     return {
       market: request.market,
       run_id: runId,
