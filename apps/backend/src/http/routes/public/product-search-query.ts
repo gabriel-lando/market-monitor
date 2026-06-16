@@ -41,6 +41,11 @@ export const PRODUCT_SEARCH_QUERY = `
           OR ($2 <> '' AND REPLACE(p.normalized_name, ' ', '') LIKE '%' || $2 || '%')
       END AS is_direct_match,
       CASE
+        WHEN $1 = '' THEN FALSE
+        ELSE p.normalized_name LIKE $1 || '%'
+          OR ($2 <> '' AND REPLACE(p.normalized_name, ' ', '') LIKE $2 || '%')
+      END AS is_prefix_match,
+      CASE
         WHEN $1 = '' THEN 0::REAL
         ELSE GREATEST(
           similarity(p.normalized_name, $1),
@@ -103,6 +108,11 @@ export const PRODUCT_SEARCH_QUERY = `
           OR ($2 <> '' AND REPLACE(ml.normalized_name, ' ', '') LIKE '%' || $2 || '%')
       END AS is_direct_match,
       CASE
+        WHEN $1 = '' THEN FALSE
+        ELSE ml.normalized_name LIKE $1 || '%'
+          OR ($2 <> '' AND REPLACE(ml.normalized_name, ' ', '') LIKE $2 || '%')
+      END AS is_prefix_match,
+      CASE
         WHEN $1 = '' THEN 0::REAL
         ELSE GREATEST(
           similarity(ml.normalized_name, $1),
@@ -156,6 +166,7 @@ export const PRODUCT_SEARCH_QUERY = `
       market_prices,
       COUNT(*) OVER ()::INTEGER AS total_count,
       CASE WHEN is_direct_match THEN 0 ELSE 1 END AS direct_match_rank,
+      CASE WHEN is_prefix_match THEN 0 ELSE 1 END AS prefix_match_rank,
       match_score,
       result_type_rank
     FROM candidates
@@ -169,12 +180,26 @@ export const PRODUCT_SEARCH_QUERY = `
     market_prices,
     total_count
   FROM ranked
-  ORDER BY direct_match_rank ASC, match_score DESC, result_type_rank ASC, name ASC
+  ORDER BY direct_match_rank ASC, prefix_match_rank ASC, match_score DESC, result_type_rank ASC, name ASC
   LIMIT $5 OFFSET $6
 `;
 
-const PRODUCT_SEARCH_FUZZY_MATCH_THRESHOLD = 0.45;
+const DEFAULT_PRODUCT_SEARCH_FUZZY_MATCH_THRESHOLD = 0.45;
+
+function resolveProductSearchFuzzyMatchThreshold(searchTerm: string) {
+  const compactLength = searchTerm.replace(/\s+/g, '').length;
+
+  if (compactLength <= 3) {
+    return 0.7;
+  }
+
+  if (compactLength <= 5) {
+    return 0.6;
+  }
+
+  return DEFAULT_PRODUCT_SEARCH_FUZZY_MATCH_THRESHOLD;
+}
 
 export function buildProductSearchParams(args: { searchTerm: string; market: string | null; limit: number; offset: number }) {
-  return [args.searchTerm, args.searchTerm.replace(/\s+/g, ''), PRODUCT_SEARCH_FUZZY_MATCH_THRESHOLD, args.market, args.limit, args.offset];
+  return [args.searchTerm, args.searchTerm.replace(/\s+/g, ''), resolveProductSearchFuzzyMatchThreshold(args.searchTerm), args.market, args.limit, args.offset];
 }

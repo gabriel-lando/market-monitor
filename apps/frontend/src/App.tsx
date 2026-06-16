@@ -14,34 +14,6 @@ const SEARCH_RESULTS_LIMIT = 50;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
-function sortSearchResults(results: ProductSearchResult[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  return [...results].sort((left, right) => {
-    const leftTypeWeight = left.result_type === 'canonical_product' ? 0 : 1;
-    const rightTypeWeight = right.result_type === 'canonical_product' ? 0 : 1;
-    if (leftTypeWeight !== rightTypeWeight) {
-      return leftTypeWeight - rightTypeWeight;
-    }
-
-    const leftName = left.name.toLowerCase();
-    const rightName = right.name.toLowerCase();
-    const leftStartsWith = leftName.startsWith(normalizedQuery) ? 0 : 1;
-    const rightStartsWith = rightName.startsWith(normalizedQuery) ? 0 : 1;
-    if (leftStartsWith !== rightStartsWith) {
-      return leftStartsWith - rightStartsWith;
-    }
-
-    const leftIndex = leftName.indexOf(normalizedQuery);
-    const rightIndex = rightName.indexOf(normalizedQuery);
-    if (leftIndex !== rightIndex) {
-      return leftIndex - rightIndex;
-    }
-
-    return leftName.localeCompare(rightName, 'pt-BR');
-  });
-}
-
 function getLatestTimestamp(points: HistoryPoint[]) {
   const latest = [...points].sort((left, right) => Date.parse(right.captured_at) - Date.parse(left.captured_at))[0];
   return latest?.captured_at ?? latest?.snapshot_date ?? null;
@@ -188,9 +160,7 @@ export function App() {
 
       try {
         const response = await searchProducts(trimmedQuery, { limit: SUGGESTION_LIMIT, signal: controller.signal });
-        const sortedResults = sortSearchResults(response.data, trimmedQuery)
-          .filter((result) => result.result_type === 'canonical_product')
-          .slice(0, SUGGESTION_LIMIT);
+        const sortedResults = response.data.filter((result) => result.result_type === 'canonical_product').slice(0, SUGGESTION_LIMIT);
 
         startTransition(() => {
           setResults(sortedResults);
@@ -241,9 +211,7 @@ export function App() {
 
       try {
         const response = await searchProducts(submittedQuery, { limit: SEARCH_RESULTS_LIMIT, signal: controller.signal });
-        const canonicalResults = sortSearchResults(response.data, submittedQuery)
-          .filter((result) => result.result_type === 'canonical_product')
-          .slice(0, SEARCH_RESULTS_LIMIT);
+        const canonicalResults = response.data.filter((result) => result.result_type === 'canonical_product').slice(0, SEARCH_RESULTS_LIMIT);
 
         startTransition(() => {
           setSearchResults(canonicalResults);
