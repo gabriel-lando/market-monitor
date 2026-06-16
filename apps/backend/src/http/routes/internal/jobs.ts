@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { SCRAPING_DISABLED_ERROR_CODE, type ScrapeJobRequest } from '@market-monitor/shared';
 
+import { runReclassifyListings, type ReclassifyListingsRequest } from '../../../scraping/jobs/reclassify-listings.js';
 import { ScrapingDisabledError } from '../../../scraping/jobs/errors.js';
 import { runScrapeOnce } from '../../../scraping/jobs/run-scrape-once.js';
 
@@ -11,6 +12,13 @@ const ScrapeRequestSchema = z.object({
   force: z.boolean().optional(),
   dry_run: z.boolean().optional(),
   reason: z.string().min(1).optional(),
+});
+
+const ReclassifyRequestSchema = z.object({
+  market: z.string().min(1),
+  dry_run: z.boolean().optional(),
+  only_source_seed: z.boolean().optional(),
+  limit: z.number().int().positive().max(100000).optional(),
 });
 
 export const internalJobRoutes: FastifyPluginAsync = async (app) => {
@@ -127,5 +135,36 @@ export const internalJobRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return { data: result.rows[0] };
+  });
+
+  app.post('/jobs/reclassify-listings', async (request, reply) => {
+    const payload = ReclassifyRequestSchema.parse(request.body) as ReclassifyListingsRequest;
+    const startedAt = new Date().toISOString();
+
+    setImmediate(() => {
+      void runReclassifyListings(
+        {
+          logger: app.log,
+          db: app.db,
+        },
+        payload,
+      )
+        .then((result) => {
+          app.log.info(result, 'Background reclassification job completed.');
+        })
+        .catch((error) => {
+          app.log.error({ market: payload.market, err: error }, 'Background reclassification job failed.');
+        });
+    });
+
+    return reply.code(202).send({
+      data: {
+        status: 'accepted',
+        market: payload.market,
+        started_at: startedAt,
+        message: 'Reclassification job accepted and started asynchronously.',
+      },
+      request_id: request.id,
+    });
   });
 };

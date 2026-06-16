@@ -206,6 +206,30 @@ async function resolveExactNameMatch(client: PoolClient, marketId: string, listi
     };
   }
 
+  const crossMarketScoped = await client.query<{ product_id: string }>(
+    `
+      SELECT ml.product_id
+      FROM market_listings ml
+      JOIN products p ON p.id = ml.product_id
+      WHERE
+        ml.product_id IS NOT NULL
+        AND ml.market_id <> $1
+        AND p.normalized_name = $2
+      GROUP BY ml.product_id
+      ORDER BY MAX(ml.last_seen_at) DESC
+      LIMIT 2
+    `,
+    [marketId, listing.normalizedName],
+  );
+
+  if (crossMarketScoped.rows.length === 1) {
+    return {
+      productId: crossMarketScoped.rows[0].product_id,
+      matched: true,
+      matchMethod: 'cross_market_exact_name',
+    };
+  }
+
   return null;
 }
 

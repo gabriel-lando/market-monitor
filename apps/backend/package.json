@@ -9,7 +9,9 @@
         "lint": "echo No lint configured yet",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "start": "node dist/index.js",
-        "scrape-once": "tsx src/cli/scrape-once.ts"
+        "scrape-once": "tsx src/cli/scrape-once.ts",
+        "reclassify-listings": "tsx src/cli/reclassify-listings.ts",
+        "merge-products-manual": "tsx src/cli/merge-products-manual.ts"
     },
     "dependencies": {
         "@fastify/cors": "^11.2.0",
