@@ -159,7 +159,7 @@ export function App() {
       setSearchMessage(null);
 
       try {
-        const response = await searchProducts(trimmedQuery, { limit: SUGGESTION_LIMIT, signal: controller.signal });
+        const response = await searchProducts(trimmedQuery, { limit: SUGGESTION_LIMIT, includeTotal: false, signal: controller.signal });
         const sortedResults = response.data.filter((result) => result.result_type === 'canonical_product').slice(0, SUGGESTION_LIMIT);
 
         startTransition(() => {

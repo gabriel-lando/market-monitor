@@ -2,10 +2,12 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { DEFAULT_HISTORY_INTERVAL, HISTORY_INTERVALS, isHistoryInterval, type HistoryPoint, type ProductSearchResult } from '@market-monitor/shared';
 
-import { buildProductSearchParams, PRODUCT_SEARCH_QUERY } from './product-search-query.js';
+import { buildProductSearchCountParams, buildProductSearchParams, PRODUCT_SEARCH_COUNT_QUERY, PRODUCT_SEARCH_QUERY } from './product-search-query.js';
 import { normalizeText } from '../../../scraping/pipeline/utils.js';
 
-interface ProductSearchRow extends ProductSearchResult {
+type ProductSearchRow = ProductSearchResult;
+
+interface ProductSearchCountRow {
   total_count: number;
 }
 
@@ -86,10 +88,13 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       market?: string;
       limit?: string;
       offset?: string;
+      include_total?: string;
     };
 
     const limit = Math.min(Number(query.limit ?? 20), 100);
     const offset = Number(query.offset ?? 0);
+    const includeTotal = query.include_total !== 'false';
+    const queryLimit = includeTotal ? limit : limit + 1;
     const searchTerm = normalizeText(query.q?.trim());
 
     const searchResults = await app.db.query<ProductSearchRow>(
@@ -97,13 +102,26 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
       buildProductSearchParams({
         searchTerm,
         market: query.market ?? null,
-        limit,
+        limit: queryLimit,
         offset,
       }),
     );
 
-    const total = searchResults.rows[0]?.total_count ?? 0;
-    const data = searchResults.rows.map(({ total_count: _totalCount, ...result }) => result);
+    const hasMore = includeTotal ? false : searchResults.rows.length > limit;
+    const data = includeTotal ? searchResults.rows : searchResults.rows.slice(0, limit);
+
+    let total = offset + data.length;
+    if (includeTotal) {
+      const countResult = await app.db.query<ProductSearchCountRow>(
+        PRODUCT_SEARCH_COUNT_QUERY,
+        buildProductSearchCountParams({
+          searchTerm,
+          market: query.market ?? null,
+        }),
+      );
+
+      total = countResult.rows[0]?.total_count ?? 0;
+    }
 
     return {
       data,
@@ -111,7 +129,7 @@ export const productRoutes: FastifyPluginAsync = async (app) => {
         limit,
         offset,
         total,
-        has_more: offset + data.length < total,
+        has_more: includeTotal ? offset + data.length < total : hasMore,
       },
     };
   });

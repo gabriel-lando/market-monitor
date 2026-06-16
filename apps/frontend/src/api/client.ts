@@ -6,6 +6,7 @@ const API_BASE_URL = (rawBaseUrl && rawBaseUrl.trim().length > 0 ? rawBaseUrl : 
 interface SearchProductsOptions {
   limit?: number;
   offset?: number;
+  includeTotal?: boolean;
   signal?: AbortSignal;
 }
 
@@ -35,6 +36,10 @@ export async function searchProducts(query: string, options: SearchProductsOptio
 
   if (options.offset !== undefined) {
     params.set('offset', String(options.offset));
+  }
+
+  if (options.includeTotal === false) {
+    params.set('include_total', 'false');
   }
 
   return fetchJson<{ data: ProductSearchResult[]; meta: PaginationMeta }>(`/api/v1/products?${params.toString()}`, options.signal);
