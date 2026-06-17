@@ -22,9 +22,15 @@ const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 });
 
-function toDate(value: string | null) {
+type DateInput = Date | string | null;
+
+function toDate(value: DateInput) {
   if (!value) {
     return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.valueOf()) ? null : value;
   }
 
   const parsed = new Date(value);
@@ -48,7 +54,7 @@ export function formatPriceDelta(value: number | null, fallback = 'No spread yet
   return `${signal}${currencyFormatter.format(value / 100)}`;
 }
 
-export function formatCompactDate(value: string | null, fallback = 'No date') {
+export function formatCompactDate(value: DateInput, fallback = 'No date') {
   const parsed = toDate(value);
   if (!parsed) {
     return fallback;
@@ -57,7 +63,7 @@ export function formatCompactDate(value: string | null, fallback = 'No date') {
   return compactDateFormatter.format(parsed);
 }
 
-export function formatDateLabel(value: string | null, fallback = 'No date') {
+export function formatDateLabel(value: DateInput, fallback = 'No date') {
   const parsed = toDate(value);
   if (!parsed) {
     return fallback;
@@ -66,7 +72,7 @@ export function formatDateLabel(value: string | null, fallback = 'No date') {
   return dateFormatter.format(parsed);
 }
 
-export function formatDateTime(value: string | null, fallback = 'Pending capture') {
+export function formatDateTime(value: DateInput, fallback = 'Pending capture') {
   const parsed = toDate(value);
   if (!parsed) {
     return fallback;

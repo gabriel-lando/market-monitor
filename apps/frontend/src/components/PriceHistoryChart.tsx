@@ -33,7 +33,7 @@ function parseDateOnlyTimestamp(value: string) {
     return Number.NaN;
   }
 
-  return Date.UTC(year, month - 1, day);
+  return new Date(year, month - 1, day, 12).getTime();
 }
 
 function getPointTimestamp(point: HistoryPoint) {
@@ -99,7 +99,7 @@ export function PriceHistoryChart({ ariaLabel, series }: PriceHistoryChartProps)
     const xTicks = xTickTimestamps.map((value) => ({
       value,
       x: scaleX(value),
-      label: formatCompactDate(new Date(value).toISOString()),
+      label: formatCompactDate(new Date(value)),
     }));
 
     const renderedSeries = normalizedSeries.map((entry) => {
@@ -119,8 +119,8 @@ export function PriceHistoryChart({ ariaLabel, series }: PriceHistoryChartProps)
     });
 
     return {
-      minDateLabel: formatDateLabel(new Date(minX).toISOString()),
-      maxDateLabel: formatDateLabel(new Date(maxX).toISOString()),
+      minDateLabel: formatDateLabel(new Date(minX)),
+      maxDateLabel: formatDateLabel(new Date(maxX)),
       renderedSeries,
       xTicks,
       yTicks,
