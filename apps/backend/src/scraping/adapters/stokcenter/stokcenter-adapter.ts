@@ -237,12 +237,12 @@ function getRequestContext(): StokCenterRequestContext {
 
 function buildBaseHeaders(context: StokCenterRequestContext) {
   return {
-    accept: 'application/json',
+    'accept': 'application/json',
     'content-type': 'application/json',
-    domainkey: context.domainKey,
-    organizationid: context.organizationId,
-    origin: context.storefrontBaseUrl,
-    referer: `${context.storefrontBaseUrl}/`,
+    'domainkey': context.domainKey,
+    'organizationid': context.organizationId,
+    'origin': context.storefrontBaseUrl,
+    'referer': `${context.storefrontBaseUrl}/`,
     'user-agent': context.userAgent,
   };
 }
@@ -250,7 +250,7 @@ function buildBaseHeaders(context: StokCenterRequestContext) {
 function buildLoginHeaders(context: StokCenterRequestContext) {
   return {
     ...buildBaseHeaders(context),
-    authorization: 'Bearer',
+    'authorization': 'Bearer',
     'sessao-id': '',
   };
 }
@@ -258,7 +258,7 @@ function buildLoginHeaders(context: StokCenterRequestContext) {
 function buildAuthHeaders(context: StokCenterRequestContext, authState: StokCenterAuthState) {
   return {
     ...buildBaseHeaders(context),
-    authorization: `Bearer ${authState.authToken}`,
+    'authorization': `Bearer ${authState.authToken}`,
     'sessao-id': authState.sessionId,
   };
 }
@@ -284,13 +284,7 @@ async function fetchJson<TSchema extends z.ZodTypeAny>(url: string, schema: TSch
   return schema.parse(payload) as z.infer<TSchema>;
 }
 
-async function fetchJsonWithRetries<TSchema extends z.ZodTypeAny>(
-  url: string,
-  schema: TSchema,
-  headers: Record<string, string>,
-  logger: ScrapeLogger,
-  logContext: Record<string, unknown>,
-): Promise<z.infer<TSchema>> {
+async function fetchJsonWithRetries<TSchema extends z.ZodTypeAny>(url: string, schema: TSchema, headers: Record<string, string>, logger: ScrapeLogger, logContext: Record<string, unknown>): Promise<z.infer<TSchema>> {
   for (let attempt = 0; attempt <= MAX_REQUEST_RETRIES; attempt += 1) {
     try {
       return await fetchJson(url, schema, headers);
@@ -447,12 +441,7 @@ function mapDepartments(rows: unknown[]) {
       continue;
     }
 
-    const name =
-      sanitizeString(parsed.data.nome) ??
-      sanitizeString(parsed.data.name) ??
-      sanitizeString(parsed.data.descricao) ??
-      sanitizeString(parsed.data.label) ??
-      `Departamento ${id}`;
+    const name = sanitizeString(parsed.data.nome) ?? sanitizeString(parsed.data.name) ?? sanitizeString(parsed.data.descricao) ?? sanitizeString(parsed.data.label) ?? `Departamento ${id}`;
 
     const slug = deriveDepartmentSlug(parsed.data.slug ?? parsed.data.link);
 
@@ -466,16 +455,12 @@ function mapDepartments(rows: unknown[]) {
   return [...byId.values()].sort((left, right) => left.id - right.id);
 }
 
-async function discoverDepartments(
-  context: StokCenterRequestContext,
-  authState: StokCenterAuthState,
-  logger: ScrapeLogger,
-): Promise<StokCenterDepartment[]> {
+async function discoverDepartments(context: StokCenterRequestContext, authState: StokCenterAuthState, logger: ScrapeLogger): Promise<StokCenterDepartment[]> {
   const headers = buildAuthHeaders(context, authState);
   const endpoints = [
+    `${context.apiBaseUrl}/loja/classificacoes_mercadologicas/departamentos/arvore`,
     `${context.apiBaseUrl}/loja/classificacoes_mercadologicas/departamentos`,
     `${context.apiBaseUrl}/classificacoes_mercadologicas/departamentos`,
-    `${context.apiBaseUrl}/loja/classificacoes_mercadologicas/departamentos/arvore`,
   ];
 
   for (const endpoint of endpoints) {
@@ -491,16 +476,36 @@ async function discoverDepartments(
         return departments;
       }
     } catch (error) {
-      logger.warn?.(
-        {
-          market: 'stokcenter',
-          endpoint,
-          error,
-        },
-        'Failed to fetch Stok Center department list endpoint; trying fallback strategy.',
-      );
+      if (error instanceof StokCenterRequestError && error.statusCode === 404) {
+        logger.debug?.(
+          {
+            market: 'stokcenter',
+            endpoint,
+            error,
+          },
+          'Stok Center department list endpoint returned 404; trying fallback strategy.',
+        );
+      } else {
+        logger.warn?.(
+          {
+            market: 'stokcenter',
+            endpoint,
+            error,
+          },
+          'Failed to fetch Stok Center department list endpoint; trying fallback strategy.',
+        );
+      }
     }
   }
+
+  logger.error?.(
+    {
+      market: 'stokcenter',
+      endpoints,
+      fallbackDepartmentIds: context.fallbackDepartmentIds,
+    },
+    'Failed to discover Stok Center departments from all API endpoints; falling back to static department IDs.',
+  );
 
   return context.fallbackDepartmentIds.map((id) => ({
     id,
@@ -508,12 +513,7 @@ async function discoverDepartments(
   }));
 }
 
-async function fetchDepartmentFilters(
-  departmentId: number,
-  context: StokCenterRequestContext,
-  authState: StokCenterAuthState,
-  logger: ScrapeLogger,
-) {
+async function fetchDepartmentFilters(departmentId: number, context: StokCenterRequestContext, authState: StokCenterAuthState, logger: ScrapeLogger) {
   const url = `${context.apiBaseUrl}/loja/classificacoes_mercadologicas/departamentos/${departmentId}/produtos/filtros`;
   const response = await fetchJsonWithRetries(url, FiltersResponseSchema, buildAuthHeaders(context, authState), logger, {
     market: 'stokcenter',
@@ -616,10 +616,7 @@ function resolveDepartmentNameFromFilters(departmentId: number, filters: z.infer
     return undefined;
   }
 
-  const selectedOption =
-    departmentFilter.options.find((option) => option.checked) ??
-    departmentFilter.options.find((option) => toPositiveInt(option.value) === departmentId) ??
-    departmentFilter.options[0];
+  const selectedOption = departmentFilter.options.find((option) => option.checked) ?? departmentFilter.options.find((option) => toPositiveInt(option.value) === departmentId) ?? departmentFilter.options[0];
 
   return sanitizeString(selectedOption?.label);
 }
@@ -964,4 +961,3 @@ export class StokCenterAdapter implements MarketAdapter {
     };
   }
 }
-
