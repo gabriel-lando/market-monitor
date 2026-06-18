@@ -56,7 +56,7 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
       'Starting scrape job.',
     );
 
-    const marketContext = await resolveMarketContext(db, request.market);
+    const marketContext = request.dry_run ? null : await resolveMarketContext(db, request.market);
     const categories = await adapter.discoverCategories(logger);
     const scrapeCategories = categories.filter((category) => category.depth === 1);
 
@@ -64,6 +64,10 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
 
     let categoryIdBySourceKey = new Map<string, string>();
     if (!request.dry_run) {
+      if (!marketContext) {
+        throw new Error('Market context is required for non-dry-run scrapes.');
+      }
+
       const run = await createCollectionRun(db, marketContext, request.market, triggerSource, request.dry_run ?? false, request.reason);
       runId = run.id;
       categoryIdBySourceKey = await upsertCategories(db, marketContext.marketId, categories);
@@ -81,6 +85,10 @@ export async function runScrapeOnce(dependencies: RunScrapeOnceDependencies, req
 
         if (!runId) {
           throw new Error('Collection run was not created for a non-dry run scrape.');
+        }
+
+        if (!marketContext) {
+          throw new Error('Market context is required for listing persistence.');
         }
 
         const persisted = await persistListing(db, marketContext, runId, categoryIdBySourceKey, listing);
