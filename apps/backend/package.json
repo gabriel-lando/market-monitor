@@ -16,7 +16,7 @@
     "dependencies": {
         "@fastify/cors": "^11.2.0",
         "@fastify/sensible": "^6.0.4",
-        "@fastify/static": "^9.1.3",
+        "@fastify/static": "^10.1.2",
         "@market-monitor/db": "workspace:*",
         "@market-monitor/shared": "workspace:*",
         "fastify": "^5.8.5",
